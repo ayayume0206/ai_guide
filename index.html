@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>捜査支援ガイド：きさらぎ町警察本部</title>
+  <style>
+    body { background-color: #0d1117; color: #e6edf3; font-family: "Helvetica Neue", Arial, sans-serif; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; background: #161b22; padding: 30px; border-radius: 12px; border: 1px solid #30363d; }
+    h2 { border-left: 6px solid #f85149; padding-left: 15px; font-size: 1.5em; margin-bottom: 25px; }
+    
+    .status-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 15px; background: #0d1117; border-radius: 8px; border: 1px solid #30363d; }
+    .limit-text { font-weight: bold; color: #f85149; font-size: 1.1em; }
+    
+    .input-panel { background: #21262d; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    .input-group { display: flex; gap: 10px; }
+    select, input, button { padding: 12px; border-radius: 6px; border: 1px solid #30363d; font-size: 14px; }
+    select, input { background: #0d1117; color: white; flex: 1; }
+    button { background: #238636; color: white; cursor: pointer; font-weight: bold; border: none; min-width: 120px; }
+    button:hover { background: #2ea043; }
+    button:disabled { background: #30363d; color: #8b949e; cursor: not-allowed; }
+
+    .guide-output { background: #0d1117; padding: 20px; border-radius: 8px; margin-bottom: 30px; min-height: 80px; border-left: 5px solid #1f6feb; line-height: 1.6; }
+    .hint-title { color: #58a6ff; font-weight: bold; font-size: 1.2em; margin-bottom: 10px; border-bottom: 1px solid #30363d; padding-bottom: 5px; }
+    
+    .section-title { font-size: 1.1em; font-weight: bold; margin-bottom: 15px; color: #8b949e; border-bottom: 1px solid #30363d; }
+    
+    .history-item { background: #1c2128; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #30363d; }
+    .history-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .history-tag { font-size: 0.75em; padding: 2px 6px; border-radius: 4px; background: #30363d; color: #c9d1d9; margin-right: 8px; }
+    .history-body { font-size: 0.9em; color: #adbac7; border-top: 1px dashed #444c56; margin-top: 8px; padding-top: 10px; line-height: 1.5; }
+    .history-msg { margin-top: 8px; padding: 8px; border-radius: 4px; background: rgba(0,0,0,0.2); font-style: italic; }
+
+    .recovery-btn { opacity: 0.05; cursor: default; background: none; border: none; color: #8b949e; font-size: 10px; transition: 0.3s; }
+    .recovery-btn:hover { opacity: 1; cursor: pointer; color: #58a6ff; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>🚨 捜査支援ガイド：専門官チャット</h2>
+  
+  <div class="status-bar">
+    <div class="limit-text">ガイド要請可能回数: <span id="guide-limit">3</span> / 3</div>
+    <button class="recovery-btn" onclick="recoveryMode()">[ADMIN_BY_STAFF]</button>
+  </div>
+
+  <div class="input-panel">
+    <div class="input-group">
+      <select id="guide-type">
+        <option value="sns">SNS投稿（No.）</option>
+        <option value="disclosure">開示請求結果（No.）</option>
+        <option value="camera">防犯カメラ（ID）</option>
+      </select>
+      <input type="text" id="guide-id" placeholder="IDを入力" autocomplete="off">
+      <button id="guide-btn" onclick="getGuide()">情報を要請</button>
+    </div>
+  </div>
+
+  <div class="guide-output" id="guide-display">
+    <span style="color: #8b949e;">本部の専門官が証拠の関連性を分析します。</span>
+  </div>
+
+  <div class="section-title">🕒 過去の要請記録（全履歴）</div>
+  <div id="guide-history"></div>
+</div>
+
+<script src="guideData.js"></script>
+
+<script>
+  const ADMIN_CODE = "0204"; 
+  const INITIAL_LIMIT = 3;  
+  
+  let limit = localStorage.getItem('guide_limit') !== null ? parseInt(localStorage.getItem('guide_limit')) : INITIAL_LIMIT;
+  let historyData = localStorage.getItem('guide_history') ? JSON.parse(localStorage.getItem('guide_history')) : [];
+
+  window.onload = updateUI;
+
+  function getGuide() {
+    const typeSelect = document.getElementById('guide-type');
+    const rawId = document.getElementById('guide-id').value.trim();
+    if (!rawId) return;
+    if (limit <= 0) { alert("要請枠が終了しました。"); return; }
+
+    const sanitizedId = rawId.replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).toLowerCase();
+    const searchKey = `${typeSelect.value}_${sanitizedId}`;
+    const data = guideData[searchKey];
+    const display = document.getElementById('guide-display');
+    
+    let historyEntry = {
+      time: new Date().toLocaleTimeString(),
+      typeText: typeSelect.selectedOptions[0].text,
+      isMatch: !!data
+    };
+
+    limit--;
+
+    if (data) {
+      display.style.borderLeftColor = "#1f6feb";
+      display.innerHTML = `<div class="hint-title">${data.title}</div><p><strong>💡 ヒント:</strong> ${data.hint}</p><p style="color: #7ee787;">${data.message}</p>`;
+      
+      historyEntry.title = data.title;
+      historyEntry.hint = data.hint;
+      historyEntry.message = data.message;
+    } else {
+      const title = `調査対象: ${rawId}`;
+      const hint = "データベース照合結果：該当なし。重要人物との接触や、事件当日の不審な動きは確認できません。";
+      const message = "この項目は本事件には全く関係しません。";
+
+      display.style.borderLeftColor = "#f85149";
+      display.innerHTML = `<div class="hint-title" style="color:#f85149;">${title}</div><p>⚠️ ${hint}</p><p style="color:#f85149;">${message}</p>`;
+
+      historyEntry.title = title;
+      historyEntry.hint = hint;
+      historyEntry.message = message;
+    }
+
+    historyData.unshift(historyEntry);
+    saveState();
+    updateUI();
+    document.getElementById('guide-id').value = "";
+  }
+
+  function updateUI() {
+    document.getElementById('guide-limit').innerText = limit;
+    document.getElementById('guide-btn').disabled = (limit <= 0);
+    
+    const historyDiv = document.getElementById('guide-history');
+    if (historyData.length === 0) {
+      historyDiv.innerHTML = '<p style="color: #8b949e; font-size: 0.9em;">履歴はありません。</p>';
+      return;
+    }
+
+    historyDiv.innerHTML = historyData.map(h => `
+      <div class="history-item">
+        <div class="history-header">
+          <div><span class="history-tag">${h.typeText}</span><strong>${h.title}</strong></div>
+          <div style="font-size: 0.8em; color: #8b949e;">${h.time}</div>
+        </div>
+        <div class="history-body">
+          <div><strong>分析結果:</strong> ${h.hint}</div>
+          <div class="history-msg" style="color: ${h.isMatch ? '#7ee787' : '#f85149'};">
+            ${h.message}
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function saveState() {
+    localStorage.setItem('guide_limit', limit);
+    localStorage.setItem('guide_history', JSON.stringify(historyData));
+  }
+
+  function recoveryMode() {
+    if (prompt("ADMIN CODE:") === ADMIN_CODE) {
+      limit++; saveState(); updateUI();
+    }
+  }
+</script>
+</body>
+</html>
