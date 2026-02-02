@@ -62,8 +62,8 @@ const guideData = {
   },
   "sns_169": {
     title: "SNS投稿 No.169 について",
-    hint: "",
-    message: ""
+    hint: "この投稿は本物である可能性があります。この暴露投稿をしたアカウントに開示請求をして、本物か偽物か確かめてみましょう。",
+    message: "捜査が進行する可能性があります。"
   },
   // 開示請求（disclosure）のガイド例
   "disclosure_1": {
